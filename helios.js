@@ -47902,7 +47902,8 @@ class NativeSig extends NativeScript {
      * @returns {boolean}
      */
     eval(context) {
-        return context.isSignedBy(this.#pkh);
+		// PubKeyHash.dummy() is used as placeholder while gathering signatures
+        return context.isSignedBy(this.#pkh) || context.isSignedBy(PubKey.dummy().pubKeyHash);
     }
 }
 
@@ -48771,7 +48772,7 @@ export class Tx extends CborData {
 	 */
 	estimateFee(networkParams) {
 		let [a, b] = networkParams.txFeeParams;
-
+		
 		if (!this.#valid) {
 			// add dummy signatures
 			let nUniquePubKeyHashes = this.#body.countUniqueSigners();
@@ -48786,7 +48787,8 @@ export class Tx extends CborData {
 			this.#witnesses.removeDummySignatures();
 		}
 
-		let sizeFee = BigInt(a) + BigInt(size)*BigInt(b);
+ 		// Adding 10% to workaround fee too small issue
+		let sizeFee = BigInt(a) + BigInt(size*b*10);
 
 		let exFee = this.#witnesses.estimateFee(networkParams);
 
@@ -48976,7 +48978,7 @@ export class Tx extends CborData {
 	 */
 	balanceCollateral(networkParams, changeAddress, spareUtxos) {
 		// don't do this step if collateral was already added explicitly
-		if (this.#body.collateral.length > 0 || !this.isSmart()) {
+		if (this.#body.collateral.length > 0 || !this.hasPlutusScripts()) {
 			return;
 		}
 
@@ -49182,6 +49184,14 @@ export class Tx extends CborData {
 	}
 
 	/**
+	 * @internal
+	 * @returns {boolean}
+	 */
+	hasPlutusScripts() {
+		return this.#witnesses.plutusScripts.length > 0;
+	}
+
+	/**
 	 * Throws an error if there isn't enough collateral
 	 * Also throws an error if the script doesn't require collateral, but collateral was actually included
 	 * Shouldn't be used directly
@@ -49189,7 +49199,7 @@ export class Tx extends CborData {
 	 * @param {NetworkParams} networkParams 
 	 */
 	checkCollateral(networkParams) {
-		if (this.isSmart()) {
+		if (this.hasPlutusScripts()) {
 			let minCollateralPct = networkParams.minCollateralPct;
 
 			// only use the exBudget 
@@ -50381,6 +50391,21 @@ export class TxWitnesses extends CborData {
 	}
 
 	/**
+	 * Returns just Plutus scripts, including the reference scripts
+	 * @type {UplcProgram[]}
+	 */
+	get plutusScripts() {
+		/**
+		 * @type {UplcProgram[]}
+		 */
+		let uplcScripts = this.#scripts.slice().concat(this.#refScripts.slice())
+		
+		//allScripts = allScripts.concat(this.#nativeScripts.slice());
+
+		return uplcScripts;
+	}
+
+	/**
 	 * @type {Redeemer[]}
 	 */
 	get redeemers() {
@@ -50840,10 +50865,11 @@ export class TxWitnesses extends CborData {
 	 * @param {TxBody} body
 	 */
 	executeNativeScripts(body) {
-		const ctx = new NativeContext(body.firstValidSlot, body.lastValidSlot, body.signers);
+		const ctx = new NativeContext(body.firstValidSlot, body.lastValidSlot, this.#signatures.map(s => s.pubKeyHash));
 
 		this.#nativeScripts.forEach(s => {
 			if (!s.eval(ctx)) {
+				// TODO: Graceful way to do the eval while still waiting for real signatures
 				throw new Error("native script execution returned false");
 			}
 		});
