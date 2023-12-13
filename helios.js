@@ -48787,7 +48787,7 @@ export class Tx extends CborData {
 			this.#witnesses.removeDummySignatures();
 		}
 
- 		// Adding 10% to workaround fee too small issue
+ 		// Adding more to workaround fee too small issue
 		let sizeFee = BigInt(a) + BigInt(size*b*10);
 
 		let exFee = this.#witnesses.estimateFee(networkParams);
@@ -50869,7 +50869,6 @@ export class TxWitnesses extends CborData {
 
 		this.#nativeScripts.forEach(s => {
 			if (!s.eval(ctx)) {
-				// TODO: Graceful way to do the eval while still waiting for real signatures
 				throw new Error("native script execution returned false");
 			}
 		});
