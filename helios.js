@@ -8,7 +8,7 @@
 // Website:       https://www.hyperion-bt.org
 // Repository:    https://github.com/hyperion-bt/helios
 // Version:       0.16.7
-// Last update:   January 2024
+// Last update:   February 2024
 // License type:  BSD-3-Clause
 //
 //
@@ -31432,7 +31432,6 @@ export class ChainExpr extends Expr {
 				}
 			}
 		}
-
 		return this.downstreamExpr.eval(scope);
 	}
 
@@ -35048,7 +35047,7 @@ export class DataSwitchExpr extends SwitchExpr {
 						new IR("("), new IR("e"), new IR(") -> {"), 
 						ir,
 						new IR("("),
-						new IR("__code__unListData"),
+						new IR("__core__unListData"),
 						new IR("("), new IR("e"), new IR(")"),
 						new IR(")"),
 						new IR("}")
@@ -35059,7 +35058,7 @@ export class DataSwitchExpr extends SwitchExpr {
 						new IR("("), new IR("e"), new IR(") -> {"), 
 						ir,
 						new IR("("),
-						new IR("__code__unMapData"),
+						new IR("__core__unMapData"),
 						new IR("("), new IR("e"), new IR(")"),
 						new IR(")"),
 						new IR("}")
@@ -35114,6 +35113,7 @@ export class DataSwitchExpr extends SwitchExpr {
 		return res;
 	}
 }
+
 
 
 ////////////////////////////////////
@@ -48977,7 +48977,7 @@ export class Tx extends CborData {
 	 * @param {Address} changeAddress
 	 * @param {TxInput[]} spareUtxos
 	 */
-	balanceCollateral(networkParams, changeAddress, spareUtxos) {
+	balanceCollateral(networkParams, changeAddress, spareUtxos, walletCollateral) {
 		// don't do this step if collateral was already added explicitly
 		if (this.#body.collateral.length > 0 || !this.isSmart()) {
 			return;
@@ -49023,7 +49023,12 @@ export class Tx extends CborData {
 		changeOutput.correctLovelace(networkParams);
 
 		if (collateral < minCollateral) {
-			throw new Error("unable to find enough collateral input");
+			if (walletCollateral) {
+                this.#body.addCollateral(walletCollateral);
+                return;
+            } else {
+                throw new Error('unable to find enough collateral input');
+            }
 		} else {
 			if (collateral > minCollateral + changeOutput.value.lovelace) {
 				changeOutput.setValue(new Value(0n));
@@ -49277,9 +49282,10 @@ export class Tx extends CborData {
 	 * @param {NetworkParams} networkParams
 	 * @param {Address}       changeAddress
 	 * @param {TxInput[]}        spareUtxos - might be used during balancing if there currently aren't enough inputs
+	 * @param {TxInput | null}   walletCollateral - if set, this input will be used as collateral
 	 * @returns {Promise<Tx>}
 	 */
-	async finalize(networkParams, changeAddress, spareUtxos = []) {
+	async finalize(networkParams, changeAddress, spareUtxos = [], walletCollateral = null) {
 		assert(!this.#valid);
 
 		if (this.#metadata !== null) {
@@ -49322,7 +49328,7 @@ export class Tx extends CborData {
 		await this.executeRedeemers(networkParams, changeAddress);
 
 		// balance collateral (if collateral wasn't already set manually)
-		this.balanceCollateral(networkParams, changeAddress, spareUtxos.slice());
+		this.balanceCollateral(networkParams, changeAddress, spareUtxos.slice(), walletCollateral);
 
 		// correct the changeOutput now the exact fee is known
 		this.correctChangeOutput(networkParams, changeOutput);
@@ -50909,6 +50915,10 @@ export class TxWitnesses extends CborData {
 
 			const cost = await this.executeRedeemer(networkParams, body, redeemer, scriptContext);
 
+			if (redeemer instanceof SpendingRedeemer) {
+                cost.mem = BigInt(Math.ceil(Number(cost.mem) * 1.05));
+                cost.cpu = BigInt(Math.ceil(Number(cost.cpu) * 1.05));
+            }
 			redeemer.setProfile(cost);
 		}
 
@@ -50937,7 +50947,6 @@ export class TxWitnesses extends CborData {
 			const scriptContext = body.toScriptContextData(networkParams, this.#redeemers, this.#datums, i, txId);
 
 			const cost = await this.executeRedeemer(networkParams, body, redeemer, scriptContext);
-
 			if (redeemer.memCost < cost.mem) {
 				throw new Error(`internal finalization error, redeemer mem budget too low (${redeemer.memCost} < ${cost.mem})`);
 			} else if (redeemer.cpuCost < cost.cpu) {
