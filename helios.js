@@ -47905,7 +47905,8 @@ class NativeSig extends NativeScript {
      * @returns {boolean}
      */
     eval(context) {
-        return context.isSignedBy(this.#pkh);
+		// PubKeyHash.dummy() is used as placeholder while gathering signatures
+        return context.isSignedBy(this.#pkh) || context.isSignedBy(PubKey.dummy().pubKeyHash);
     }
 }
 
@@ -48789,7 +48790,8 @@ export class Tx extends CborData {
 			this.#witnesses.removeDummySignatures();
 		}
 
-		let sizeFee = BigInt(a) + BigInt(size)*BigInt(b);
+ 		// Adding more to workaround fee too small issue
+		let sizeFee = BigInt(a) + BigInt(size*b*10);
 
 		let exFee = this.#witnesses.estimateFee(networkParams);
 
@@ -48979,7 +48981,7 @@ export class Tx extends CborData {
 	 */
 	balanceCollateral(networkParams, changeAddress, spareUtxos, walletCollateral) {
 		// don't do this step if collateral was already added explicitly
-		if (this.#body.collateral.length > 0 || !this.isSmart()) {
+		if (this.#body.collateral.length > 0 || !this.hasPlutusScripts()) {
 			return;
 		}
 
@@ -49190,6 +49192,13 @@ export class Tx extends CborData {
 	}
 
 	/**
+	 * @internal
+	 * @returns {boolean}
+	 */
+	hasPlutusScripts() {
+		return this.#witnesses.plutusScripts.length > 0;
+	}
+	/**
 	 * Throws an error if there isn't enough collateral
 	 * Also throws an error if the script doesn't require collateral, but collateral was actually included
 	 * Shouldn't be used directly
@@ -49197,7 +49206,7 @@ export class Tx extends CborData {
 	 * @param {NetworkParams} networkParams 
 	 */
 	checkCollateral(networkParams) {
-		if (this.isSmart()) {
+		if (this.hasPlutusScripts()) {
 			let minCollateralPct = networkParams.minCollateralPct;
 
 			// only use the exBudget 
@@ -50390,6 +50399,21 @@ export class TxWitnesses extends CborData {
 	}
 
 	/**
+		 * Returns just Plutus scripts, including the reference scripts
+		 * @type {UplcProgram[]}
+		 */
+	get plutusScripts() {
+		/**
+		 * @type {UplcProgram[]}
+		 */
+		let uplcScripts = this.#scripts.slice().concat(this.#refScripts.slice())
+
+		//allScripts = allScripts.concat(this.#nativeScripts.slice());
+
+		return uplcScripts;
+	}
+
+	/**
 	 * @type {Redeemer[]}
 	 */
 	get redeemers() {
@@ -50849,7 +50873,7 @@ export class TxWitnesses extends CborData {
 	 * @param {TxBody} body
 	 */
 	executeNativeScripts(body) {
-		const ctx = new NativeContext(body.firstValidSlot, body.lastValidSlot, body.signers);
+		const ctx = new NativeContext(body.firstValidSlot, body.lastValidSlot, this.#signatures.map(s => s.pubKeyHash));
 
 		this.#nativeScripts.forEach(s => {
 			if (!s.eval(ctx)) {
@@ -51712,7 +51736,7 @@ export class DCert extends CborData {
 							if (certType == 0) cert = new DCertRegister(stakeHash);
 							if (certType == 1) cert = new DCertDeregister(stakeHash);
 						} else if (i == 2){
-							poolHash = PubKeyHash.fromCbor(Cbor.decodeBytes(fieldBytes));
+							poolHash = PubKeyHash.fromHex(Buffer.from(Cbor.decodeBytes(fieldBytes)).toString('hex'));
 							if (certType == 2) cert = new DCertDelegate(stakeHash, poolHash);
 						}
 						break;
