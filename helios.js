@@ -48791,7 +48791,7 @@ export class Tx extends CborData {
 		}
 
  		// Adding more to workaround fee too small issue
-		let sizeFee = BigInt(a) + BigInt(Math.ceil(size*b*1.10));
+		let sizeFee = BigInt(a) + BigInt(Math.ceil(size*b*1.15));
 
 		let exFee = this.#witnesses.estimateFee(networkParams);
 
