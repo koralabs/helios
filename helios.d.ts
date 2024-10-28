@@ -3092,11 +3092,14 @@ export class Tx extends CborData {
      *
      * Sets the validatity range automatically if a call to `tx.time_range` is detected in any of the attached Helios scripts.
      * @param {NetworkParams} networkParams
-     * @param {Address}       changeAddress
-     * @param {TxInput[]}        spareUtxos - might be used during balancing if there currently aren't enough inputs
+     * @param {Address} changeAddress
+     * @param {TxInput[]} spareUtxos - might be used during balancing if there currently aren't enough inputs
+     * @param {TxInput=} walletCollateral - if set, this input will be used as collateral 
+	 * @param {Number=} sizeFeeMultiplier
+	 * @param {Number=} exFeeMultiplier
      * @returns {Promise<Tx>}
      */
-    finalize(networkParams: NetworkParams, changeAddress: Address, spareUtxos?: TxInput[]): Promise<Tx>;
+    finalize(networkParams: NetworkParams, changeAddress: Address, spareUtxos?: TxInput[], walletCollateral?: TxInput, sizeFeeMultiplier?: number, exFeeMultiplier?: number): Promise<Tx>;
     /**
      * @type {string}
      */
