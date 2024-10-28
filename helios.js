@@ -48771,9 +48771,11 @@ export class Tx extends CborData {
 	 * Shouldn't be used directly
 	 * @internal
 	 * @param {NetworkParams} networkParams
+	 * @param {Number=} sizeFeeMultiplier
+	 * @param {Number=} exFeeMultiplier
 	 * @returns {bigint}
 	 */
-	estimateFee(networkParams) {
+	estimateFee(networkParams, sizeFeeMultiplier = 1.15, exFeeMultiplier = 1.0) {
 		let [a, b] = networkParams.txFeeParams;
 
 		if (!this.#valid) {
@@ -48791,11 +48793,20 @@ export class Tx extends CborData {
 		}
 
  		// Adding more to workaround fee too small issue
-		let sizeFee = BigInt(a) + BigInt(Math.ceil(size*b*1.15));
+		// Size of the transaction
+        let sizeFee = BigInt(a) + BigInt(Math.ceil(size * b * sizeFeeMultiplier));
 
-		let exFee = this.#witnesses.estimateFee(networkParams);
+        // Size of the scripts
+        const scriptsSize = (this.#witnesses.plutusScripts || [])
+            .concat(this.#body.outputs.map((o) => o.refScript).filter(Boolean) || [])
+            .reduce((sum, s) => {
+                return sum + s.toCbor().length;
+            }, 0);
 
-		return sizeFee + exFee;
+        // Execution of the scripts
+        let exFee = this.#witnesses.estimateFee(networkParams);
+
+        return sizeFee + BigInt(scriptsSize * 15) + BigInt(Math.ceil(Number(exFee) * exFeeMultiplier));
 	}
 
 	/**
@@ -48826,7 +48837,21 @@ export class Tx extends CborData {
 	 * @internal
 	 */
 	checkScripts() {
-		let scripts = this.#witnesses.scripts;
+		// KORA_UPDATE: combine witness scripts and output scripts
+        let scripts = this.#witnesses.scripts;
+
+        /**
+         * @type {Map<string, number>}
+         */
+        let wantedScripts = new Map();
+
+        this.#body.collectScriptHashes(wantedScripts);
+
+        const outputScripts = this.#body.outputs
+            .map((o) => o.refScript)
+            .filter((s) => s != null && wantedScripts.has(bytesToHex(s.hash())));
+        scripts = scripts.concat(outputScripts);
+        this.#witnesses['otherScripts'] = outputScripts;
 
 		/**
 		 * @type {Set<string>}
@@ -48836,13 +48861,6 @@ export class Tx extends CborData {
 		scripts.forEach(script => {
 			currentScripts.add(bytesToHex(script.hash()))
 		});
-
-		/** 
-		 * @type {Map<string, number>} 
-		 */
-		let wantedScripts = new Map();
-
-		this.#body.collectScriptHashes(wantedScripts);
 
 		if (wantedScripts.size < scripts.length) {
 			throw new Error("too many scripts included, not all are needed");
@@ -49196,7 +49214,7 @@ export class Tx extends CborData {
 	 * @returns {boolean}
 	 */
 	hasPlutusScripts() {
-		return this.#witnesses.plutusScripts.length > 0;
+		return this.#witnesses.plutusScripts.concat(this.#witnesses['otherScripts']).length > 0;
 	}
 	/**
 	 * Throws an error if there isn't enough collateral
@@ -49237,9 +49255,11 @@ export class Tx extends CborData {
 	 * Final check that fee is big enough
 	 * @internal
 	 * @param {NetworkParams} networkParams 
+	 * @param {Number=} sizeFeeMultiplier
+	 * @param {Number=} exFeeMultiplier
 	 */
-	checkFee(networkParams) {
-		assert(this.estimateFee(networkParams) <= this.#body.fee, `fee too small (${this.#body.fee} < ${this.estimateFee(networkParams)})`);
+	checkFee(networkParams, sizeFeeMultiplier, exFeeMultiplier) {
+		assert(this.estimateFee(networkParams, sizeFeeMultiplier, exFeeMultiplier) <= this.#body.fee, `fee too small (${this.#body.fee} < ${this.estimateFee(networkParams)})`);
 	}
 
 	/**
@@ -49291,10 +49311,12 @@ export class Tx extends CborData {
 	 * @param {NetworkParams} networkParams
 	 * @param {Address}       changeAddress
 	 * @param {TxInput[]}        spareUtxos - might be used during balancing if there currently aren't enough inputs
-	 * @param {TxInput | null}   walletCollateral - if set, this input will be used as collateral
+	 * @param {TxInput=}   walletCollateral - if set, this input will be used as collateral 
+	 * @param {Number=} sizeFeeMultiplier
+	 * @param {Number=} exFeeMultiplier
 	 * @returns {Promise<Tx>}
 	 */
-	async finalize(networkParams, changeAddress, spareUtxos = [], walletCollateral = null) {
+	async finalize(networkParams, changeAddress, spareUtxos = [], walletCollateral = null, sizeFeeMultiplier, exFeeMultiplier) {
 		assert(!this.#valid);
 
 		if (this.#metadata !== null) {
@@ -49359,7 +49381,7 @@ export class Tx extends CborData {
 
 		this.checkSize(networkParams);
 
-		this.checkFee(networkParams);
+		this.checkFee(networkParams, sizeFeeMultiplier, exFeeMultiplier);
 
 		this.checkBalanced(networkParams);
 
@@ -50722,7 +50744,8 @@ export class TxWitnesses extends CborData {
 	 * @returns {UplcProgram}
 	 */
 	getUplcProgram(scriptHash) {
-		const p = this.scripts.find(s => eq(s.hash(), scriptHash.bytes));
+		// KORA_UPDATE: otherScripts was added to witnesses in checkScripts()
+		const p = this.scripts.concat(this.otherScripts).find((s) => eq(s.hash(), scriptHash.bytes));
 
 		if (!(p instanceof UplcProgram)) {
 			throw new Error("not a uplc program");
