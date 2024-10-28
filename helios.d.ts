@@ -1349,6 +1349,15 @@ export class Address extends HeliosData {
      */
     static fromHashes(hash: PubKeyHash | ValidatorHash, stakingHash?: null | (PubKeyHash | StakingValidatorHash), isTestnet?: boolean): Address;
     /**
+	 * Simple script address with an optional staking hash (`PubKeyHash` or `StakingValidatorHash`).
+	 * @internal
+	 * @param {ValidatorHash} hash
+	 * @param {null | (PubKeyHash | StakingValidatorHash)} stakingHash
+     * @param {boolean} isTestnet Defaults to `config.IS_TESTNET`
+	 * @returns {Address}
+	 */
+	static fromValidatorHash(hash: ValidatorHash, stakingHash?: null | (PubKeyHash | StakingValidatorHash), isTestnet?: boolean): Address;
+    /**
      * Returns `true` if the given `Address` is a testnet address.
      * @param {Address} address
      * @returns {boolean}
@@ -3094,7 +3103,7 @@ export class Tx extends CborData {
      * @param {NetworkParams} networkParams
      * @param {Address} changeAddress
      * @param {TxInput[]} spareUtxos - might be used during balancing if there currently aren't enough inputs
-     * @param {TxInput=} walletCollateral - if set, this input will be used as collateral 
+     * @param {?TxInput=} walletCollateral - if set, this input will be used as collateral 
 	 * @param {Number=} sizeFeeMultiplier
 	 * @param {Number=} exFeeMultiplier
      * @returns {Promise<Tx>}
