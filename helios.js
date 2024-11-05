@@ -443,6 +443,9 @@ export const config = {
      * Default: `undefined` (no limit).
      */
     MAX_ASSETS_PER_CHANGE_OUTPUT: undefined,
+
+    TX_SIZE_FEE_MULTIPLIER: 1,
+    EX_FEE_MULTIPLIER: 1
 }
 
 
@@ -48771,11 +48774,9 @@ export class Tx extends CborData {
 	 * Shouldn't be used directly
 	 * @internal
 	 * @param {NetworkParams} networkParams
-	 * @param {Number=} sizeFeeMultiplier
-	 * @param {Number=} exFeeMultiplier
 	 * @returns {bigint}
 	 */
-	estimateFee(networkParams, sizeFeeMultiplier = 1.15, exFeeMultiplier = 1.0) {
+	estimateFee(networkParams) {
 		let [a, b] = networkParams.txFeeParams;
 
 		if (!this.#valid) {
@@ -48794,11 +48795,12 @@ export class Tx extends CborData {
 
  		// Adding more to workaround fee too small issue
 		// Size of the transaction
-        let sizeFee = BigInt(a) + BigInt(Math.ceil(size * b * sizeFeeMultiplier));
+        let sizeFee = BigInt(a) + BigInt(Math.ceil(size * b * config.TX_SIZE_FEE_MULTIPLIER));
 
         // Size of the scripts
-        const scriptsSize = (this.#witnesses.plutusScripts || [])
-            .concat(this.#body.outputs.map((o) => o.refScript).filter(Boolean) || [])
+        const scriptsSize = 
+			(this.#body.inputs.map((i) => i.output.refScript).filter(Boolean) || [])
+			.concat(this.#body.refInputs.map((i) => i.output.refScript).filter(Boolean) || [])
             .reduce((sum, s) => {
                 return sum + s.toCbor().length;
             }, 0);
@@ -48806,7 +48808,7 @@ export class Tx extends CborData {
         // Execution of the scripts
         let exFee = this.#witnesses.estimateFee(networkParams);
 
-        return sizeFee + BigInt(scriptsSize * 15) + BigInt(Math.ceil(Number(exFee) * exFeeMultiplier));
+        return sizeFee + BigInt(scriptsSize * 15) + BigInt(Math.ceil(Number(exFee) * config.EX_FEE_MULTIPLIER));
 	}
 
 	/**
@@ -49255,11 +49257,9 @@ export class Tx extends CborData {
 	 * Final check that fee is big enough
 	 * @internal
 	 * @param {NetworkParams} networkParams 
-	 * @param {Number=} sizeFeeMultiplier
-	 * @param {Number=} exFeeMultiplier
 	 */
-	checkFee(networkParams, sizeFeeMultiplier, exFeeMultiplier) {
-		assert(this.estimateFee(networkParams, sizeFeeMultiplier, exFeeMultiplier) <= this.#body.fee, `fee too small (${this.#body.fee} < ${this.estimateFee(networkParams)})`);
+	checkFee(networkParams) {
+		assert(this.estimateFee(networkParams) <= this.#body.fee, `fee too small (${this.#body.fee} < ${this.estimateFee(networkParams)})`);
 	}
 
 	/**
@@ -49311,12 +49311,10 @@ export class Tx extends CborData {
 	 * @param {NetworkParams} networkParams
 	 * @param {Address}       changeAddress
 	 * @param {TxInput[]}        spareUtxos - might be used during balancing if there currently aren't enough inputs
-	 * @param {TxInput=}   walletCollateral - if set, this input will be used as collateral 
-	 * @param {Number=} sizeFeeMultiplier
-	 * @param {Number=} exFeeMultiplier
+	 * @param {TxInput=}   walletCollateral - if set, this input will be used as collateral
 	 * @returns {Promise<Tx>}
 	 */
-	async finalize(networkParams, changeAddress, spareUtxos = [], walletCollateral = null, sizeFeeMultiplier, exFeeMultiplier) {
+	async finalize(networkParams, changeAddress, spareUtxos = [], walletCollateral = null) {
 		assert(!this.#valid);
 
 		if (this.#metadata !== null) {
@@ -49381,7 +49379,7 @@ export class Tx extends CborData {
 
 		this.checkSize(networkParams);
 
-		this.checkFee(networkParams, sizeFeeMultiplier, exFeeMultiplier);
+		this.checkFee(networkParams);
 
 		this.checkBalanced(networkParams);
 
