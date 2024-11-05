@@ -124,6 +124,8 @@ export namespace config {
      *   IGNORE_UNEVALUATED_CONSTANTS?: boolean
      *   CHECK_CASTS?: boolean
      *   MAX_ASSETS_PER_CHANGE_OUTPUT?: number
+     *   TX_SIZE_FEE_MULTIPLIER?: number
+     *   EX_FEE_MULTIPLIER?: number
      * }} props 
      */
     function set(props: {
@@ -136,7 +138,8 @@ export namespace config {
         VALIDITY_RANGE_END_OFFSET?: number | undefined;
         IGNORE_UNEVALUATED_CONSTANTS?: boolean | undefined;
         CHECK_CASTS?: boolean | undefined;
-        MAX_ASSETS_PER_CHANGE_OUTPUT?: number | undefined;
+        TX_SIZE_FEE_MULTIPLIER?: number | undefined;
+        EX_FEE_MULTIPLIER?: number | undefined;
     }): void;
     /**
      * Global debug flag. Currently unused.
