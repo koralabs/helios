@@ -1,5 +1,9 @@
 # Helios Lang
 
+## Contributor test policy
+
+Tests and coverage run locally only, never in GitHub Actions, directly or through lifecycle scripts, composites, workflow templates, or shared helpers. `npm run build` invokes `npm test` in this checkout, so it is also local-only unless its build/test graph is separated. Preserve local scripts. Build-only automation, publication, deployment, and production guards remain permitted; retire obsolete required test checks.
+
 Helios is a Domain Specific Language that compiles to Plutus-Core (i.e. Cardano on-chain validator scripts). Helios is a non-Haskell alternative to Plutus.
 
 Helios is purely functional, strongly typed, and has a simple curly braces syntax. It notably supports closures, functions with optional arguments and multiple return values, OOP-like methods, enums as tagged unions, and generics.
