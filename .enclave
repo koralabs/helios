@@ -1,0 +1,58 @@
+# Exact repository-root-relative paths. No wildcards, no directory prefixes.
+# A change to any of these needs operator approval at merge time (see CANONICAL_CONTRACT.md).
+# Why: the compiler and transaction builder decide script hashes, script addresses, fees and what gets signed.
+.enclave
+CANONICAL_CONTRACT.md
+# What gets published
+package.json
+helios.js
+helios.d.ts
+.github/workflows/node.js.yml
+# Invariant 1: compiler output (script hashes)
+src/helios-ast-build.js
+src/helios-ast-expressions.js
+src/helios-ast-statements.js
+src/helios-data.js
+src/helios-program.js
+src/helios-scopes.js
+src/ir-ast.js
+src/ir-build.js
+src/ir-context.js
+src/ir-defs.js
+src/ir-evaluate.js
+src/ir-optimize.js
+src/ir-program.js
+src/eval-builtin-funcs.js
+src/eval-common.js
+src/eval-containers.js
+src/eval-hashes.js
+src/eval-money.js
+src/eval-parametric.js
+src/eval-primitives.js
+src/eval-time.js
+src/eval-tx.js
+src/uplc-ast.js
+src/uplc-builtins.js
+src/uplc-costmodels.js
+src/uplc-data.js
+src/uplc-program.js
+src/tokenization.js
+src/tokens.js
+src/bundling.js
+src/config.js
+# Invariant 2: transactions, addresses, signatures, fees, coin selection
+src/tx-builder.js
+src/coinselection.js
+src/crypto.js
+src/cbor.js
+src/native.js
+src/network.js
+src/wallets.js
+src/utils.js
+# Tests that pin those behaviours
+test/addresses.test.js
+test/tx-building.test.js
+test/native.test.js
+test/example-scripts.test.js
+test/exbudget.test.js
+test/builtins.test.js
